@@ -40,4 +40,4 @@ yarn-error.*
 /ios
 /android
 
-API_firebase.js
+supabase.js

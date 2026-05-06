@@ -1,97 +1,87 @@
-// Hooks do React para gerenciar estado e efeitos colaterais
 import { useState, useEffect } from 'react';
 
-// Container principal de navegação do app
+// Navegação
 import { NavigationContainer } from '@react-navigation/native';
-
-// Criador de navegação em pilha (Stack Navigation)
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-// Serviço de autenticação do Firebase
-import { auth } from './src/services/API_Firebase';
+// Supabase
+import { supabase } from './src/services/supabase';
 
-// Listener que observa mudanças no estado de autenticação do usuário
-import { onAuthStateChanged } from 'firebase/auth';
+// Telas
+import LoginScreen from './src/screens/LoginScreen';
+import RegisterScreen from './src/screens/RegisterScreen';
+import HomeScreen from './src/screens/HomeScreen';
+import SplashScreen from './src/screens/SplashScreen';
+import BookDetailScreen from './src/screens/BookDetailScreen';
+import AddBookScreen from './src/screens/AddBookScreen';
+import ProfileScreen from './src/screens/ProfileScreen';
 
-// Telas do aplicativo
-import Login from './src/screens/Login';
-import Cadastro from './src/screens/Cadastro';
-import Home from './src/screens/Home';
-
-// Componentes básicos do React Native para UI simples
-import { View, Text } from 'react-native';
-
-// Instância do Stack Navigator
 const Stack = createNativeStackNavigator();
 
+
+
 /**
- * Stack responsável pelas telas de autenticação
- * Usado quando o usuário ainda NÃO está logado
+ * 🔐 STACK DE AUTENTICAÇÃO
  */
 function AuthStack() {
   return (
-    <Stack.Navigator>
-      <Stack.Screen name="Login" component={Login} />
-      <Stack.Screen name="Cadastro" component={Cadastro} />
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Splash" component={SplashScreen} options={{ headerShown: false }}
+/>
+      <Stack.Screen name="Login" component={LoginScreen} />
+      <Stack.Screen name="Register" component={RegisterScreen} />
     </Stack.Navigator>
   );
 }
 
 /**
- * Componente principal do aplicativo
- * Responsável por controlar:
- * - Estado de autenticação do usuário
- * - Carregamento inicial do Firebase
- * - Fluxo de navegação (logado vs não logado)
+ * 📱 STACK PRINCIPAL (logado)
  */
-export default function App() {
-  // Armazena o usuário autenticado (ou null se não estiver logado)
-  const [usuario, setUsuario] = useState(null);
+function AppStack({ usuario }) {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Home">
+        {(props) => <HomeScreen {...props} usuario={usuario} />}
+      </Stack.Screen>
 
-  // Controla estado de carregamento inicial da autenticação
+      <Stack.Screen name="BookDetail" component={BookDetailScreen} />
+      <Stack.Screen name="AddBook" component={AddBookScreen} />
+      <Stack.Screen name="Profile" component={ProfileScreen} />
+    </Stack.Navigator>
+  );
+}
+
+export default function App() {
+  const [usuario, setUsuario] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  /**
-   * Observa mudanças no estado de autenticação do Firebase
-   * Atualiza o usuário e encerra o loading quando Firebase responde
-   */
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUsuario(user);
+    async function getSession() {
+      const { data } = await supabase.auth.getSession();
+      setUsuario(data.session?.user ?? null);
       setLoading(false);
-    });
+    }
 
-    // Remove o listener quando o componente desmonta
-    return unsubscribe;
+    getSession();
+
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUsuario(session?.user ?? null);
+      }
+    );
+
+    return () => {
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
-  /**
-   * Tela de carregamento enquanto o Firebase verifica autenticação
-   */
   if (loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <Text>Carregando...</Text>
-      </View>
-    );
+    return <SplashScreen />;
   }
 
-  /**
-   * Controle principal de navegação:
-   * - Se usuário existir → entra no app (Home)
-   * - Se não existir → fluxo de autenticação
-   */
   return (
     <NavigationContainer>
-      {usuario ? (
-        <Stack.Navigator>
-          <Stack.Screen name="Home">
-            {(props) => <Home {...props} usuario={usuario} />}
-          </Stack.Screen>
-        </Stack.Navigator>
-      ) : (
-        <AuthStack />
-      )}
+      {usuario ? <AppStack usuario={usuario} /> : <AuthStack />}
     </NavigationContainer>
   );
 }
